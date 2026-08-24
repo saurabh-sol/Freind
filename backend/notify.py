@@ -63,9 +63,12 @@ def _format_new_bookings_email(session_id: str, bookings: list) -> tuple:
         lines.append(f"Check-in:     {b.get('check_in', 'N/A')}")
         lines.append(f"Check-out:    {b.get('check_out', 'N/A')}")
         lines.append(f"Guests:       {b.get('num_guests', 'N/A')}")
+        guest_names = b.get("guest_names") or []
+        if guest_names:
+            lines.append(f"Guest Names:  {', '.join(guest_names)}")
         lines.append(f"Add-ons:      {b.get('add_ons', 'None')}")
         lines.append(f"Price:        INR {b.get('total_price_inr', 'N/A')}")
-        lines.append(f"Hold ID:      {b.get('hold_id', 'N/A')}")
+        lines.append(f"Reference No: {b.get('booking_reference', 'N/A')}")
         lines.append("")
 
     lines.append("ACTION NEEDED: These are HOLDS, not confirmed bookings. Please "
@@ -81,9 +84,12 @@ def _format_update_email(session_id: str, update: dict) -> tuple:
     prev = update.get("previous", {})
     upd = update.get("updated", {})
 
+    upd_guest_names = upd.get("guest_names") or []
+    guest_names_line = f"\n  Guests (names): {', '.join(upd_guest_names)}" if upd_guest_names else ""
+
     body = f"""Booking UPDATED via AI agent ({now})
 Channel/session: {session_id}
-Hold ID: {update.get('hold_id', 'N/A')}
+Reference No: {update.get('booking_reference', 'N/A')}
 
 BEFORE:
   Room:    {prev.get('room_type', 'N/A')}
@@ -93,11 +99,11 @@ BEFORE:
 AFTER:
   Room:    {upd.get('room_type', 'N/A')}
   Guests:  {upd.get('num_guests', 'N/A')}
-  Price:   INR {upd.get('total_price_inr', 'N/A')}
+  Price:   INR {upd.get('total_price_inr', 'N/A')}{guest_names_line}
 
 ACTION NEEDED: Please confirm the updated details and any price difference with the guest.
 """
-    subject = f"Booking Updated - Hold {update.get('hold_id', 'N/A')}"
+    subject = f"Booking Updated - Ref {update.get('booking_reference', 'N/A')}"
     return subject, body
 
 
@@ -111,7 +117,7 @@ def check_and_notify(session_id: str, trace: list) -> None:
 
     for entry in trace:
         result = entry.get("result", {})
-        if entry.get("tool") == "create_booking_hold" and "hold_id" in result:
+        if entry.get("tool") == "create_booking_hold" and "booking_reference" in result:
             new_bookings.append({**entry["input"], **result})
         elif entry.get("tool") == "modify_booking_hold" and result.get("status") == "hold_updated":
             updates.append(result)

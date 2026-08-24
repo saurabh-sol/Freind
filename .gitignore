@@ -1,0 +1,13 @@
+# Python
+backend/.env
+backend/venv/
+backend/__pycache__/
+backend/*.db
+
+# Node / frontend
+frontend-react/node_modules/
+frontend-react/dist/
+frontend/
+
+# OS
+.DS_Store

@@ -43,9 +43,17 @@ def _get_conn():
             num_guests INTEGER,
             add_ons TEXT,
             total_price_inr INTEGER,
-            created_at TEXT
+            created_at TEXT,
+            guest_names TEXT
         )
     """)
+    # Migration for databases created before guest_names existed --
+    # CREATE TABLE IF NOT EXISTS won't add columns to an already-existing
+    # table, so add it explicitly and ignore the error if it's already there.
+    try:
+        conn.execute("ALTER TABLE holds ADD COLUMN guest_names TEXT")
+    except sqlite3.OperationalError:
+        pass
     return conn
 
 
@@ -113,15 +121,16 @@ def count_overlapping_holds(property_id: str, room_type: str, check_in: str, che
 
 
 def create_hold(hold_id, session_id, property_id, room_type, check_in, check_out,
-                 guest_name, phone_number, num_guests, add_ons, total_price_inr) -> None:
+                 guest_name, phone_number, num_guests, add_ons, total_price_inr,
+                 guest_names=None) -> None:
     conn = _get_conn()
     conn.execute(
         """INSERT INTO holds (hold_id, session_id, property_id, room_type, check_in, check_out,
-           guest_name, phone_number, num_guests, add_ons, total_price_inr, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           guest_name, phone_number, num_guests, add_ons, total_price_inr, created_at, guest_names)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (hold_id, session_id, property_id, room_type, check_in, check_out, guest_name,
          phone_number, num_guests, json.dumps(add_ons), total_price_inr,
-         datetime.now().isoformat()),
+         datetime.now().isoformat(), json.dumps(guest_names or [])),
     )
     conn.commit()
     conn.close()
@@ -133,29 +142,34 @@ def get_holds_by_session(session_id: str) -> list:
     conn = _get_conn()
     rows = conn.execute(
         """SELECT hold_id, property_id, room_type, check_in, check_out, guest_name,
-           num_guests, add_ons, total_price_inr, created_at FROM holds
+           num_guests, add_ons, total_price_inr, created_at, guest_names FROM holds
            WHERE session_id = ? ORDER BY created_at DESC""",
         (session_id,),
     ).fetchall()
     conn.close()
     cols = ["hold_id", "property_id", "room_type", "check_in", "check_out", "guest_name",
-            "num_guests", "add_ons", "total_price_inr", "created_at"]
-    return [dict(zip(cols, row)) for row in rows]
+            "num_guests", "add_ons", "total_price_inr", "created_at", "guest_names"]
+    results = [dict(zip(cols, row)) for row in rows]
+    for r in results:
+        r["guest_names"] = json.loads(r["guest_names"]) if r["guest_names"] else []
+    return results
 
 
 def get_hold(hold_id: str) -> dict:
     conn = _get_conn()
     row = conn.execute(
         """SELECT hold_id, property_id, room_type, check_in, check_out, guest_name,
-           phone_number, num_guests, add_ons, total_price_inr FROM holds WHERE hold_id = ?""",
+           phone_number, num_guests, add_ons, total_price_inr, guest_names FROM holds WHERE hold_id = ?""",
         (hold_id,),
     ).fetchone()
     conn.close()
     if not row:
         return None
     cols = ["hold_id", "property_id", "room_type", "check_in", "check_out", "guest_name",
-            "phone_number", "num_guests", "add_ons", "total_price_inr"]
-    return dict(zip(cols, row))
+            "phone_number", "num_guests", "add_ons", "total_price_inr", "guest_names"]
+    result = dict(zip(cols, row))
+    result["guest_names"] = json.loads(result["guest_names"]) if result["guest_names"] else []
+    return result
 
 
 def update_hold(hold_id: str, **fields) -> None:
@@ -164,11 +178,12 @@ def update_hold(hold_id: str, **fields) -> None:
     if not fields:
         return
     conn = _get_conn()
-    set_clause = ", ".join(f"{k} = ?" for k in fields)
+    keys = list(fields.keys())
     values = list(fields.values())
-    if "add_ons" in fields:
-        idx = list(fields.keys()).index("add_ons")
-        values[idx] = json.dumps(values[idx])
+    for json_field in ("add_ons", "guest_names"):
+        if json_field in fields:
+            values[keys.index(json_field)] = json.dumps(values[keys.index(json_field)])
+    set_clause = ", ".join(f"{k} = ?" for k in keys)
     conn.execute(f"UPDATE holds SET {set_clause} WHERE hold_id = ?", (*values, hold_id))
     conn.commit()
     conn.close()

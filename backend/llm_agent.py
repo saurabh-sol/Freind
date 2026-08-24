@@ -144,6 +144,13 @@ TOOL_DEFS = [
                 "num_guests": {"type": "integer"},
                 "phone_number": {"type": "string"},
                 "add_ons": {"type": "array", "items": {"type": "string"}},
+                "guest_names": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Full name of EVERY guest staying in this room. REQUIRED "
+                                    "whenever num_guests is more than 1 -- ask the guest for "
+                                    "each person's name before calling this tool.",
+                },
             },
             "required": ["property_id", "room_type", "check_in", "check_out", "guest_name", "num_guests"],
         },
@@ -159,14 +166,20 @@ TOOL_DEFS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "hold_id": {"type": "string"},
+                "booking_reference": {"type": "string"},
                 "room_type": {"type": "string"},
                 "check_in": {"type": "string"},
                 "check_out": {"type": "string"},
                 "num_guests": {"type": "integer"},
                 "add_ons": {"type": "array", "items": {"type": "string"}},
+                "guest_names": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Full name of EVERY guest staying in this room. REQUIRED "
+                                    "if num_guests is being changed to more than 1.",
+                },
             },
-            "required": ["hold_id"],
+            "required": ["booking_reference"],
         },
     },
 ]
@@ -189,6 +202,8 @@ def _dispatch_provider_call(history: list, system_prompt: str, allow_tools: bool
         return _call_groq(history, system_prompt, allow_tools)
     elif MODEL_PROVIDER == "gemini":
         return _call_gemini(history, system_prompt, allow_tools)
+    elif MODEL_PROVIDER == "openai":
+        return _call_openai(history, system_prompt, allow_tools)
     return _call_claude(history, system_prompt, allow_tools)
  
  
@@ -228,6 +243,11 @@ YOUR JOB:
 - When the guest uses a relative date ("next weekend", "in 3 days"), convert it to an
   exact YYYY-MM-DD date yourself using today's date above, then pass the exact date to
   update_guest_state and any other tool. Never pass relative date words into a tool.
+- PAST DATES: never let a booking go through for a check-in date that has already passed.
+  You are told today's exact date above -- use it. If check_availability or
+  create_booking_hold comes back with error "check_in_date_in_past", do NOT retry with the
+  same date -- tell the guest plainly that date has already passed and ask them for a
+  future check-in date instead.
 - Decide what is still missing, and either ask ONE clear question, or call the
   appropriate tool if you have enough information.
 - EFFICIENCY: if you already know enough to call more than one tool (e.g. you
@@ -264,6 +284,12 @@ YOUR JOB:
   booking) after they've clearly answered that question. NEVER silently create a new
   booking when they meant to upgrade an existing one, and never silently modify one when
   they wanted a new one.
+- GUEST NAMES: whenever a room's num_guests is more than 1, you MUST ask the guest for the
+  full name of every person staying in that room (not just the primary booker) BEFORE calling
+  create_booking_hold or modify_booking_hold, and pass all of them in guest_names. If you call
+  either tool without enough names, it will return error "guest_names_incomplete" instead of
+  creating/updating the hold -- when that happens, ask the guest for the missing name(s) and
+  call the tool again with the complete list. For a single-guest room this is not needed.
 - MULTIPLE ROOMS IN ONE REQUEST: if the guest's party doesn't fit in one room and they agree
   to split into multiple rooms, you may call create_booking_hold multiple times (once per
   room) within the same turn -- the system automatically combines these into a single
@@ -271,7 +297,8 @@ YOUR JOB:
 - AFTER a successful create_booking_hold or modify_booking_hold, always tell the guest in
   your reply that their request has been sent to the hotel team, and include the hotel's
   contact phone number and email from the tool result's "hotel_contact" field, so they have
-  a direct contact for reference.
+  a direct contact for reference. Always refer to the tool result's "booking_reference" as
+  the "Booking Reference" (or "Reference No.") in your reply -- never call it a "Hold ID".
 - MULTI-ROOM GUEST SPLIT: if the guest's party needs more than one room, YOU decide how many
   guests go in each room, and every create_booking_hold call's num_guests must add up EXACTLY
   to the guest's total party size in state -- never less, never more. After each
@@ -289,12 +316,13 @@ YOUR JOB:
     Amenities: private pool, AC, WiFi
  
   - When confirming a booking hold (after create_booking_hold or modify_booking_hold), also
-    put each fact on its own line -- do NOT cram Hold ID / Total / add-ons onto one line with
-    "|" separators. Use this shape, one block per room, blank line between rooms:
+    put each fact on its own line -- do NOT cram Reference No / Total / add-ons onto one line
+    with "|" separators. Use this shape, one block per room, blank line between rooms:
     Beachfront Suite #2 (new)
-    Hold ID: 58f5bbb8
+    Reference No: BK-260824-7F3A
     Total: Rs 26,100
     Add-ons: Airport Pickup, Breakfast
+    Guests: Rohan Mehta, Priya Mehta
  
   - Keep it scannable -- short lines, no dense paragraphs, no asterisks anywhere.
 """
@@ -305,21 +333,21 @@ def _ensure_booking_confirmation_mentioned(final_text: str, trace: list) -> str:
     successful hold in its reply, but instructions aren't guarantees -- some
     provider responses come back empty or skip it. Rather than let the guest
     silently not know their booking went through, we check the trace ourselves:
-    if a hold was created/updated this turn and its hold_id isn't already present
-    in the model's reply, we append a plain-text confirmation built directly from
-    the tool result (same format rules: no markdown, one fact per line)."""
-    new_holds = [t for t in trace if t.get("tool") == "create_booking_hold" and "hold_id" in t.get("result", {})]
+    if a hold was created/updated this turn and its booking_reference isn't already
+    present in the model's reply, we append a plain-text confirmation built directly
+    from the tool result (same format rules: no markdown, one fact per line)."""
+    new_holds = [t for t in trace if t.get("tool") == "create_booking_hold" and "booking_reference" in t.get("result", {})]
     updated_holds = [t for t in trace if t.get("tool") == "modify_booking_hold" and t.get("result", {}).get("status") == "hold_updated"]
  
     if not new_holds and not updated_holds:
         return final_text
  
-    def _hold_id_of(entry, is_update=False):
+    def _reference_of(entry):
         r = entry["result"]
-        return r.get("hold_id", "")
+        return r.get("booking_reference", "")
  
-    all_ids = [_hold_id_of(h) for h in new_holds] + [_hold_id_of(h) for h in updated_holds]
-    already_mentioned = any(hid and hid in final_text for hid in all_ids)
+    all_refs = [_reference_of(h) for h in new_holds] + [_reference_of(h) for h in updated_holds]
+    already_mentioned = any(ref and ref in final_text for ref in all_refs)
     if already_mentioned:
         return final_text
  
@@ -331,8 +359,11 @@ def _ensure_booking_confirmation_mentioned(final_text: str, trace: list) -> str:
  
     for h in new_holds:
         r = h["result"]
-        lines.append(f"Hold ID: {r.get('hold_id', 'N/A')}")
+        lines.append(f"Reference No: {r.get('booking_reference', 'N/A')}")
         lines.append(f"Total: Rs {r.get('total_price_inr', 'N/A')}")
+        guest_names = r.get("guest_names") or []
+        if guest_names:
+            lines.append(f"Guests: {', '.join(guest_names)}")
         contact = r.get("hotel_contact", {}) or {}
         if contact:
             lines.append(f"Contact: {contact.get('phone', 'N/A')} | {contact.get('email', 'N/A')}")
@@ -341,8 +372,11 @@ def _ensure_booking_confirmation_mentioned(final_text: str, trace: list) -> str:
     for h in updated_holds:
         r = h["result"]
         upd = r.get("updated", {})
-        lines.append(f"Hold ID: {r.get('hold_id', 'N/A')} (updated)")
+        lines.append(f"Reference No: {r.get('booking_reference', 'N/A')} (updated)")
         lines.append(f"New total: Rs {upd.get('total_price_inr', 'N/A')}")
+        guest_names = upd.get("guest_names") or []
+        if guest_names:
+            lines.append(f"Guests: {', '.join(guest_names)}")
         contact = r.get("hotel_contact", {}) or {}
         if contact:
             lines.append(f"Contact: {contact.get('phone', 'N/A')} | {contact.get('email', 'N/A')}")
@@ -420,10 +454,10 @@ def run_agent_turn(session_id: str, user_message: str) -> Dict[str, Any]:
             # running total of guests committed across ALL create_booking_hold calls
             # made so far THIS turn and hand that number back to the model so it can
             # see, in the next iteration, whether the party is fully accounted for.
-            if call["name"] == "create_booking_hold" and "hold_id" in tool_output:
+            if call["name"] == "create_booking_hold" and "booking_reference" in tool_output:
                 prior_guests = sum(
                     t["input"].get("num_guests", 0) for t in trace
-                    if t.get("tool") == "create_booking_hold" and "hold_id" in t.get("result", {})
+                    if t.get("tool") == "create_booking_hold" and "booking_reference" in t.get("result", {})
                 )
                 this_call_guests = call["input"].get("num_guests", 0) or 0
                 running_total = prior_guests + this_call_guests
@@ -452,7 +486,7 @@ def run_agent_turn(session_id: str, user_message: str) -> Dict[str, Any]:
     # Deterministic guarantee (fixes "sometimes doesn't confirm the booking until
     # asked"): don't rely on the model to REMEMBER to mention a successful hold in
     # its final reply. If a booking was created/updated this turn but the reply
-    # never actually mentions its hold_id, append a plain-text confirmation built
+    # never actually mentions its booking_reference, append a plain-text confirmation built
     # straight from the tool result -- so the guest is never left without an answer.
     final_text = _ensure_booking_confirmation_mentioned(final_text, trace)
  
@@ -479,10 +513,11 @@ def _format_tool_results(tool_results: list):
 def _call_claude(history: list, system_prompt: str, allow_tools: bool = True) -> dict:
     import anthropic
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    claude_model = os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
  
     try:
         kwargs = dict(
-            model="claude-sonnet-4-6",
+            model=claude_model,
             max_tokens=800,
             temperature=0,
             system=system_prompt,
@@ -535,6 +570,56 @@ def _call_groq(history: list, system_prompt: str, allow_tools: bool = True) -> d
  
     try:
         kwargs = dict(model="openai/gpt-oss-20b", max_tokens=800, temperature=0, messages=oa_messages)
+        if allow_tools:
+            kwargs["tools"] = openai_tools
+        resp = client.chat.completions.create(**kwargs)
+    except Exception as e:
+        return {"error": str(e)}
+ 
+    choice = resp.choices[0].message
+    tool_calls, raw_content = [], []
+    if choice.tool_calls:
+        for tc in choice.tool_calls:
+            tool_input = json.loads(tc.function.arguments)
+            tool_calls.append({"id": tc.id, "name": tc.function.name, "input": tool_input})
+            raw_content.append({"type": "tool_use", "id": tc.id, "name": tc.function.name, "input": tool_input})
+    text = choice.content or ""
+    if text:
+        raw_content.append({"type": "text", "text": text})
+ 
+    return {"text": text.strip(), "tool_calls": tool_calls, "raw_content": raw_content}
+ 
+ 
+def _call_openai(history: list, system_prompt: str, allow_tools: bool = True) -> dict:
+    """Native OpenAI (ChatGPT) provider using the official OpenAI API.
+    Uses the same OpenAI-style history translation as _call_groq."""
+    from openai import OpenAI
+    openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+ 
+    openai_tools = [{"type": "function", "function": {
+        "name": t["name"], "description": t["description"], "parameters": t["input_schema"]
+    }} for t in TOOL_DEFS]
+ 
+    # Translate Claude-style history to OpenAI-style messages
+    oa_messages = [{"role": "system", "content": system_prompt}]
+    for msg in history:
+        if isinstance(msg["content"], str):
+            oa_messages.append({"role": msg["role"], "content": msg["content"]})
+        elif isinstance(msg["content"], list):
+            for block in msg["content"]:
+                if block.get("type") == "text":
+                    oa_messages.append({"role": msg["role"], "content": block["text"]})
+                elif block.get("type") == "tool_result":
+                    oa_messages.append({"role": "tool", "tool_call_id": block["tool_use_id"], "content": block["content"]})
+                elif block.get("type") == "tool_use":
+                    oa_messages.append({"role": "assistant", "content": None, "tool_calls": [{
+                        "id": block["id"], "type": "function",
+                        "function": {"name": block["name"], "arguments": json.dumps(block["input"])}
+                    }]})
+ 
+    try:
+        kwargs = dict(model=openai_model, max_tokens=800, temperature=0, messages=oa_messages)
         if allow_tools:
             kwargs["tools"] = openai_tools
         resp = client.chat.completions.create(**kwargs)

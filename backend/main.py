@@ -108,4 +108,4 @@ if os.path.isdir(frontend_dir):
 
     @app.get("/admin")
     def serve_admin():
-        return FileResponse(os.path.join(frontend_dir, "admin.html"))
+        return FileResponse(os.path.join(frontend_dir, "index.html"))
