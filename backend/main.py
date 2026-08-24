@@ -28,9 +28,29 @@ import notify
 
 app = FastAPI(title="Mehman Assignment - Mira Hotel Booking Agent")
 
+# ---------------------------------------------------------------------------
+# CORS – list every origin that is allowed to call this API.
+# Add your Vercel deployment URL (or set FRONTEND_URL env var on Render).
+# ---------------------------------------------------------------------------
+_frontend_url = os.getenv("FRONTEND_URL", "")  # e.g. https://my-app.vercel.app
+
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",        # Vite dev server
+    "http://localhost:8000",        # backend serving its own HTML in dev
+    "https://freind.onrender.com",  # backend itself (same-origin requests)
+]
+
+# Accept any *.vercel.app preview URL automatically
+import re as _re
+_VERCEL_RE = _re.compile(r"https://[a-z0-9\-]+(\.vercel\.app)$", _re.I)
+
+if _frontend_url:
+    ALLOWED_ORIGINS.append(_frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # fine for a local demo; would be locked down in production
+    allow_origin_regex=r"https://[a-z0-9\-]+(\.vercel\.app)$",
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
