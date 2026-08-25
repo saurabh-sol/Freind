@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Analytics } from '@vercel/analytics/react'
 import GuestView from './components/GuestView'
 import AdminView from './components/AdminView'
 
@@ -22,10 +23,20 @@ function App() {
 
   // Handle SPA routing
   if (currentPath.startsWith('/admin')) {
-    return <AdminView navigate={navigate} />
+    return (
+      <>
+        <AdminView navigate={navigate} />
+        <Analytics />
+      </>
+    )
   }
 
-  return <GuestView navigate={navigate} />
+  return (
+    <>
+      <GuestView navigate={navigate} />
+      <Analytics />
+    </>
+  )
 }
 
 export default App
