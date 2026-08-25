@@ -8,9 +8,8 @@ replying (e.g. update_guest_state -> search_properties -> check_availability
 "decide what is known, what is missing, whether to ask a question or use
 a tool, and what should happen next."
  
-Supports Claude (primary -- best tool-calling reliability) and Groq
-(fallback/free option) behind one interface, same pattern as the earlier
-WhatsApp project.
+Primary provider: OpenAI (gpt-4o by default, configurable via OPENAI_MODEL).
+Fallback providers: groq, gemini, claude -- set MODEL_PROVIDER env var to switch.
 """
  
 import os
@@ -27,8 +26,8 @@ load_dotenv()  # safeguard -- ensures MODEL_PROVIDER/API keys are available
 import tools
 from state import GuestState
  
-MODEL_PROVIDER = os.getenv("MODEL_PROVIDER", "groq")  # groq is default: free, fast, no rate-limit
-                                                        # issues like Gemini's free tier had for us
+MODEL_PROVIDER = os.getenv("MODEL_PROVIDER", "openai")  # openai is default (gpt-4o)
+                                                          # set MODEL_PROVIDER env var to switch providers
 MAX_TOOL_ITERATIONS = 5  # last iteration forces a text-only reply (see run_agent_turn),
                           # so the guest always gets SOME answer instead of a generic
                           # "taking too long" fallback
@@ -202,9 +201,10 @@ def _dispatch_provider_call(history: list, system_prompt: str, allow_tools: bool
         return _call_groq(history, system_prompt, allow_tools)
     elif MODEL_PROVIDER == "gemini":
         return _call_gemini(history, system_prompt, allow_tools)
-    elif MODEL_PROVIDER == "openai":
-        return _call_openai(history, system_prompt, allow_tools)
-    return _call_claude(history, system_prompt, allow_tools)
+    elif MODEL_PROVIDER == "claude":
+        return _call_claude(history, system_prompt, allow_tools)
+    # Default (and explicit "openai"): use OpenAI
+    return _call_openai(history, system_prompt, allow_tools)
  
  
 def _call_provider_with_retry(history: list, system_prompt: str, max_retries: int = 2, allow_tools: bool = True) -> dict:
