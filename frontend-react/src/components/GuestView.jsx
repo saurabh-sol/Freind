@@ -169,11 +169,13 @@ function GuestView({ navigate }) {
   const textareaRef = useRef(null);
 
   // Suggested prompts
+  const GREETING = "Hi! I'm Mehman.io. Tell me what kind of stay you're looking for — destination, dates, number of guests, or anything else on your mind!"
+
   const suggestions = [
     { title: "Trip to Goa", desc: "Goa this weekend for 3 people, budget 10k/night", text: "Looking for a stay in Goa this weekend for 3 guests, budget up to ₹10,000 per night." },
-    { title: "Luxury in Udaipur", desc: "Udaipur palace stay with lake view", text: "I'd like to book a luxury lake view hotel in Udaipur." },
-    { title: "Mumbai business trip", desc: "Single room near Bandra under 5k", text: "Looking for a single room near Bandra, Mumbai for tomorrow. Budget is ₹5,000." },
-    { title: "Family resort in Manali", desc: "Kid-friendly with mountain views", text: "Need a kid-friendly resort in Manali for 4 people with great mountain views." }
+    { title: "Heritage in Panaji", desc: "Fontainhas stay with courtyard dining", text: "I'd like a heritage stay in Panaji, preferably in Fontainhas." },
+    { title: "Candolim beach villa", desc: "Private pool villa near the beach", text: "Looking for a private pool villa in Candolim, Goa for 4 guests." },
+    { title: "Assagao backwaters", desc: "Family cottage by the river", text: "Need a kid-friendly riverside cottage in Assagao, Goa for 4 people." }
   ];
 
   // Auto scroll
@@ -226,7 +228,7 @@ function GuestView({ navigate }) {
             // First time greeting
             setMessages([{
               role: 'assistant',
-              text: "Hi! I'm Mera. Tell me what kind of stay you're looking for — destination, dates, number of guests, or anything else on your mind!"
+              text: GREETING
             }]);
           }
         }
@@ -235,7 +237,7 @@ function GuestView({ navigate }) {
         // Fallback greeting on error
         setMessages([{
           role: 'assistant',
-          text: "Hi! I'm Mira. Tell me what kind of stay you're looking for — destination, dates, number of guests, or anything else on your mind!"
+          text: GREETING
         }]);
       }
     };
@@ -306,7 +308,7 @@ function GuestView({ navigate }) {
         await fetch(`${API_BASE}/reset/${sessionId}`, { method: 'POST' });
         setMessages([{
           role: 'assistant',
-          text: "Hi! I'm Mera. Tell me what kind of stay you're looking for — destination, dates, number of guests, or anything else on your mind!"
+          text: GREETING
         }]);
         setBookingState({});
         setTraceLog([]);
@@ -389,7 +391,7 @@ function GuestView({ navigate }) {
           <div className="header-brand">
             <div className="brand-logo">M</div>
             <div>
-              <div className="brand-text">Mera</div>
+              <div className="brand-text">Mehman.io</div>
               <div className="brand-sub">Hotel Assistant</div>
             </div>
           </div>
@@ -408,12 +410,12 @@ function GuestView({ navigate }) {
 
         {/* Message Feeds */}
         <div className="messages-container">
-          {messages.length === 1 && messages[0].role === 'assistant' && messages[0].text.startsWith("Hi! I'm Mera") ? (
+          {messages.length === 1 && messages[0].role === 'assistant' && messages[0].text.startsWith("Hi! I'm Mehman.io") ? (
             /* Welcome Empty State */
             <div className="welcome-container animate-fade-in">
               <div className="welcome-logo">M</div>
-              <h2 className="welcome-title">I'm Mera, your travel assistant.</h2>
-              <p className="welcome-sub">Ask me to look for hotels, suggest room features, or build an itinerary. Try choosing one of the prompt templates below:</p>
+              <h2 className="welcome-title">I'm Mehman.io, your Goa stay assistant.</h2>
+              <p className="welcome-sub">I can help you book stays at Goa Palm Villas, Goa Heritage Villa, and Goa Backwater Retreat. Try one of the prompts below:</p>
               
               <div className="suggested-prompts-grid">
                 {suggestions.map((s, idx) => (
@@ -435,7 +437,7 @@ function GuestView({ navigate }) {
                   
                   <div className="message-content-wrapper">
                     <div className="message-sender">
-                      {msg.role === 'user' ? 'You' : 'Mera'}
+                      {msg.role === 'user' ? 'You' : 'Mehman.io'}
                     </div>
                     <div 
                       className="message-bubble"
@@ -452,7 +454,7 @@ function GuestView({ navigate }) {
                     <Sparkles size={16} />
                   </div>
                   <div className="message-content-wrapper">
-                    <div className="message-sender">Mera</div>
+                    <div className="message-sender">Mehman.io</div>
                     <div className="dot-loading-container" style={{ marginTop: 6 }}>
                       <span className="loading-dot"></span>
                       <span className="loading-dot"></span>
@@ -483,7 +485,7 @@ function GuestView({ navigate }) {
                     handleSendMessage();
                   }
                 }}
-                placeholder="Message Mera... (e.g. Booking a trip to Goa this weekend)"
+                placeholder="Message Mehman.io... (e.g. Booking a trip to Goa this weekend)"
                 disabled={loading}
               />
               <button 
@@ -495,7 +497,7 @@ function GuestView({ navigate }) {
               </button>
             </div>
             <div className="input-disclaimer">
-              Mera may display inaccurate information, including room prices. Verify reservation details before payment.
+              Mehman.io currently lists 3 properties in Goa. Verify reservation details before payment.
             </div>
           </div>
         </div>
@@ -532,6 +534,7 @@ function GuestView({ navigate }) {
                   { label: "Budget per night", val: bookingState.budget_per_night_inr ? `₹${bookingState.budget_per_night_inr}` : null },
                   { label: "Preferences", val: (bookingState.room_preferences || []).join(', ') },
                   { label: "Amenities", val: (bookingState.amenities_wanted || []).join(', ') },
+                  { label: "Selected Property", val: bookingState.selected_property_id },
                   { label: "Selected Room", val: bookingState.selected_room_type },
                 ].map((item, idx) => (
                   <div key={idx} className={`state-card ${item.val ? 'filled' : 'empty'}`}>

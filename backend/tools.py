@@ -26,6 +26,22 @@ with open(os.path.join(os.path.dirname(__file__), "hotel_data.json"), encoding="
 PROPERTIES = {p["property_id"]: p for p in HOTEL_DATA["properties"]}
  
  
+def _resolve_property_id(value: str) -> Optional[str]:
+    """The model is supposed to always pass the exact property_id (e.g.
+    'goa-palm-villas'), but in practice it sometimes passes the human-
+    readable property name instead ('Goa Palm Villas'). Rather than fail
+    hard on that mismatch, resolve it defensively: try an exact ID match
+    first, then fall back to a case-insensitive name match. Returns None
+    if nothing matches either way."""
+    if value in PROPERTIES:
+        return value
+    value_lower = value.strip().lower()
+    for prop in HOTEL_DATA["properties"]:
+        if prop["name"].lower() == value_lower or prop["property_id"].lower() == value_lower:
+            return prop["property_id"]
+    return None
+ 
+ 
 def _find_room(property_id: str, room_type: str) -> Optional[dict]:
     prop = PROPERTIES.get(property_id)
     if not prop:
@@ -40,26 +56,6 @@ def _nights(check_in: str, check_out: str) -> int:
     d1 = datetime.strptime(check_in, "%Y-%m-%d").date()
     d2 = datetime.strptime(check_out, "%Y-%m-%d").date()
     return max((d2 - d1).days, 0)
- 
- 
-def _is_past_date(d: str) -> bool:
-    """Deterministic past-date check -- never trust the model's own date
-    arithmetic for this. Returns True if `d` (YYYY-MM-DD) is strictly
-    before today's actual server date."""
-    try:
-        parsed = datetime.strptime(d, "%Y-%m-%d").date()
-    except (ValueError, TypeError):
-        return False  # malformed dates are reported elsewhere, not here
-    return parsed < date.today()
- 
- 
-def _generate_booking_reference() -> str:
-    """Human-friendly booking reference instead of a raw UUID, e.g.
-    BK-260824-7F3A (BK + YYMMDD + 4-char random suffix). Kept short enough
-    to read aloud/type but still effectively unique for this demo's scale."""
-    date_part = datetime.now().strftime("%y%m%d")
-    suffix = uuid.uuid4().hex[:4].upper()
-    return f"BK-{date_part}-{suffix}"
  
  
 # ---------------------------------------------------------------------------
@@ -124,21 +120,14 @@ def check_availability(property_id: str, room_type: str,
     """Checks real availability against existing holds, AND checks capacity.
     This is where the 'conflicting requirements' and 'no availability' edge
     cases are handled deterministically."""
+    resolved_id = _resolve_property_id(property_id)
+    if not resolved_id:
+        return {"error": f"No property matching '{property_id}' found."}
+    property_id = resolved_id
+ 
     room = _find_room(property_id, room_type)
     if not room:
         return {"error": f"No room type '{room_type}' found at property '{property_id}'."}
- 
-    # Deterministic past-date guard -- do NOT rely on the model to notice a
-    # stale/past date on its own. Checked here (not just in create_booking_hold)
-    # so both create_booking_hold AND modify_booking_hold get this for free,
-    # since both call check_availability before touching a hold.
-    if _is_past_date(check_in):
-        return {
-            "available": False,
-            "error": "check_in_date_in_past",
-            "reason": f"The check-in date {check_in} has already passed -- today's date is "
-                      f"{date.today().isoformat()}. Please ask the guest for a future check-in date.",
-        }
  
     if num_guests and num_guests > room["capacity"]:
         # Edge case: conflicting requirements (too many guests for this room)
@@ -191,9 +180,12 @@ def get_room_details(property_id: str, room_type: str) -> dict:
     """Returns full details for a specific room. If the guest asks about
     an attribute not present in this data (e.g. 'is the pool heated?'),
     the agent must say it doesn't have that information -- it is NOT here."""
-    prop = PROPERTIES.get(property_id)
-    if not prop:
-        return {"error": f"No property '{property_id}' found."}
+    resolved_id = _resolve_property_id(property_id)
+    if not resolved_id:
+        return {"error": f"No property matching '{property_id}' found."}
+    property_id = resolved_id
+    prop = PROPERTIES[property_id]
+ 
     room = _find_room(property_id, room_type)
     if not room:
         return {"error": f"No room type '{room_type}' found at '{prop['name']}'."}
@@ -216,6 +208,11 @@ def calculate_price(property_id: str, room_type: str, check_in: str, check_out: 
                      add_ons: Optional[List[str]] = None, num_guests: Optional[int] = None) -> dict:
     """100% deterministic arithmetic -- the LLM never computes this itself,
     it only calls this tool and reports the result."""
+    resolved_id = _resolve_property_id(property_id)
+    if not resolved_id:
+        return {"error": f"No property matching '{property_id}' found."}
+    property_id = resolved_id
+ 
     room = _find_room(property_id, room_type)
     if not room:
         return {"error": f"No room type '{room_type}' found."}
@@ -258,9 +255,10 @@ def calculate_price(property_id: str, room_type: str, check_in: str, check_out: 
 def get_policy(property_id: str, policy_type: Optional[str] = None) -> dict:
     """Returns policy text. If policy_type is unknown/unspecified, returns
     all policies for that property."""
-    prop = PROPERTIES.get(property_id)
-    if not prop:
-        return {"error": f"No property '{property_id}' found."}
+    resolved_id = _resolve_property_id(property_id)
+    if not resolved_id:
+        return {"error": f"No property matching '{property_id}' found."}
+    prop = PROPERTIES[resolved_id]
  
     if policy_type and policy_type.lower() in prop["policies"]:
         return {policy_type.lower(): prop["policies"][policy_type.lower()]}
@@ -273,44 +271,27 @@ def get_policy(property_id: str, policy_type: Optional[str] = None) -> dict:
 def create_booking_hold(session_id: str, property_id: str, room_type: str,
                          check_in: str, check_out: str, guest_name: str,
                          num_guests: int, phone_number: Optional[str] = None,
-                         add_ons: Optional[List[str]] = None,
-                         guest_names: Optional[List[str]] = None) -> dict:
+                         add_ons: Optional[List[str]] = None) -> dict:
     """Creates a soft hold (not a final confirmed booking -- mirrors the
     human-in-the-loop principle: the AI reserves inventory and notifies
-    staff, but a human confirms payment/final booking).
+    staff, but a human confirms payment/final booking)."""
+    resolved_id = _resolve_property_id(property_id)
+    if not resolved_id:
+        return {"error": f"No property matching '{property_id}' found."}
+    property_id = resolved_id  # normalize so the hold always stores the correct ID
  
-    guest_names: full name of EVERY guest staying in this room. Required
-    when num_guests > 1 -- enforced deterministically below rather than
-    trusting the model to remember to ask, since names are needed for the
-    hotel's own ID-proof/check-in records."""
     availability = check_availability(property_id, room_type, check_in, check_out, num_guests)
     if not availability.get("available"):
         return {"error": "Cannot create hold -- room is not available.", "details": availability}
  
-    guest_names = guest_names or []
-    if num_guests and num_guests > 1:
-        if len(guest_names) != num_guests:
-            return {
-                "error": "guest_names_incomplete",
-                "reason": f"This room is for {num_guests} guests, but {len(guest_names)} name(s) "
-                          f"were provided. Ask the guest for the full name of every person staying "
-                          f"in this room, then call create_booking_hold again with all {num_guests} names.",
-                "expected_count": num_guests,
-                "received_count": len(guest_names),
-            }
-    elif not guest_names:
-        # Single-guest room: the primary guest_name doubles as the guest list.
-        guest_names = [guest_name]
- 
-    booking_reference = _generate_booking_reference()
+    hold_id = str(uuid.uuid4())[:8]
     pricing = calculate_price(property_id, room_type, check_in, check_out, add_ons, num_guests)
  
     db.create_hold(
-        hold_id=booking_reference, session_id=session_id, property_id=property_id,
+        hold_id=hold_id, session_id=session_id, property_id=property_id,
         room_type=room_type, check_in=check_in, check_out=check_out,
         guest_name=guest_name, phone_number=phone_number, num_guests=num_guests,
         add_ons=add_ons or [], total_price_inr=pricing.get("grand_total_inr"),
-        guest_names=guest_names,
     )
  
     state = db.load_state(session_id)
@@ -319,11 +300,10 @@ def create_booking_hold(session_id: str, property_id: str, room_type: str,
  
     prop = PROPERTIES[property_id]
     return {
-        "booking_reference": booking_reference,
+        "hold_id": hold_id,
         "status": "hold_created",
         "total_price_inr": pricing.get("grand_total_inr"),
         "hotel_contact": prop.get("contact", {}),
-        "guest_names": guest_names,
         "note": "This is a temporary hold, not a final confirmed booking. Our team will reach out to confirm payment.",
     }
  
@@ -340,27 +320,25 @@ def get_guest_bookings(session_id: str) -> dict:
     holds = db.get_holds_by_session(session_id)
     for h in holds:
         h["property_name"] = PROPERTIES.get(h["property_id"], {}).get("name", h["property_id"])
-        h["booking_reference"] = h.pop("hold_id")
     return {"existing_bookings": holds, "count": len(holds)}
  
  
 # ---------------------------------------------------------------------------
 # TOOL 9: modify_booking_hold
 # ---------------------------------------------------------------------------
-def modify_booking_hold(session_id: str, booking_reference: str,
+def modify_booking_hold(session_id: str, hold_id: str,
                          room_type: Optional[str] = None,
                          check_in: Optional[str] = None,
                          check_out: Optional[str] = None,
                          num_guests: Optional[int] = None,
-                         add_ons: Optional[List[str]] = None,
-                         guest_names: Optional[List[str]] = None) -> dict:
+                         add_ons: Optional[List[str]] = None) -> dict:
     """Updates an EXISTING hold (e.g. guest wants to upgrade from 4 to 8
     guests) instead of creating a duplicate new booking. Only call this
     after the guest has explicitly confirmed they want to modify their
     existing booking (use get_guest_bookings first, then ask them)."""
-    existing = db.get_hold(booking_reference)
+    existing = db.get_hold(hold_id)
     if not existing:
-        return {"error": f"No existing booking found with booking reference '{booking_reference}'."}
+        return {"error": f"No existing booking found with hold_id '{hold_id}'."}
  
     new_room_type = room_type or existing["room_type"]
     new_check_in = check_in or existing["check_in"]
@@ -372,39 +350,21 @@ def modify_booking_hold(session_id: str, booking_reference: str,
     if not availability.get("available"):
         return {"error": "Cannot upgrade -- new requirements are not available.", "details": availability}
  
-    # Same deterministic guest-names guard as create_booking_hold: if the guest
-    # count is changing (or growing past 1), every name must be accounted for.
-    new_guest_names = guest_names if guest_names is not None else existing.get("guest_names") or []
-    if new_guests and new_guests > 1:
-        if len(new_guest_names) != new_guests:
-            return {
-                "error": "guest_names_incomplete",
-                "reason": f"This room is now for {new_guests} guests, but {len(new_guest_names)} "
-                          f"name(s) are on file. Ask the guest for the full name of every person "
-                          f"staying in this room, then call modify_booking_hold again with all "
-                          f"{new_guests} names.",
-                "expected_count": new_guests,
-                "received_count": len(new_guest_names),
-            }
-    elif not new_guest_names:
-        new_guest_names = [existing["guest_name"]]
- 
     pricing = calculate_price(existing["property_id"], new_room_type, new_check_in,
                                new_check_out, add_ons, new_guests)
  
-    db.update_hold(booking_reference, room_type=new_room_type, check_in=new_check_in,
+    db.update_hold(hold_id, room_type=new_room_type, check_in=new_check_in,
                     check_out=new_check_out, num_guests=new_guests,
-                    total_price_inr=pricing.get("grand_total_inr"),
-                    guest_names=new_guest_names)
+                    total_price_inr=pricing.get("grand_total_inr"))
  
     prop = PROPERTIES[existing["property_id"]]
     return {
-        "booking_reference": booking_reference,
+        "hold_id": hold_id,
         "status": "hold_updated",
         "previous": {"room_type": existing["room_type"], "num_guests": existing["num_guests"],
                      "total_price_inr": existing["total_price_inr"]},
         "updated": {"room_type": new_room_type, "num_guests": new_guests,
-                    "total_price_inr": pricing.get("grand_total_inr"), "guest_names": new_guest_names},
+                    "total_price_inr": pricing.get("grand_total_inr")},
         "hotel_contact": prop.get("contact", {}),
         "note": "Booking updated. Our team will confirm the new details and any price difference.",
     }

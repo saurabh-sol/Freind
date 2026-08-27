@@ -195,7 +195,7 @@ function AdminView({ navigate }) {
                     sessionDetail.history.filter(msg => typeof msg.content === 'string').map((msg, idx) => (
                       <div key={idx} className={`admin-msg-bubble ${msg.role === 'user' ? 'user' : 'assistant'}`}>
                         <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 4, fontWeight: 500 }}>
-                          {msg.role === 'user' ? 'GUEST' : 'MIRA'}
+                          {msg.role === 'user' ? 'GUEST' : 'MEHMAN.IO'}
                         </div>
                         <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
                           {msg.content}
@@ -224,6 +224,7 @@ function AdminView({ navigate }) {
                     { label: "Check-out Date", val: sessionDetail.state.check_out },
                     { label: "Guests Count", val: sessionDetail.state.num_guests },
                     { label: "Budget per night", val: sessionDetail.state.budget_per_night_inr ? `₹${sessionDetail.state.budget_per_night_inr}` : null },
+                    { label: "Selected Property", val: sessionDetail.state.selected_property_id },
                     { label: "Selected Room", val: sessionDetail.state.selected_room_type },
                     { label: "Booking Stage", val: sessionDetail.state.stage },
                   ].map((item, idx) => (

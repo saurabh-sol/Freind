@@ -4,7 +4,10 @@
       "property_id": "goa-palm-villas",
       "name": "Goa Palm Villas",
       "location": "Candolim, North Goa",
-      "contact": {"phone": "+91-98765-11001", "email": "reservations@goapalmvillas.example.com"},
+      "contact": {
+        "phone": "+91-98765-11001",
+        "email": "reservations@goapalmvillas.example.com"
+      },
       "description": "Boutique villa property near Candolim beach, known for private-pool villas.",
       "check_in_time": "2:00 PM",
       "check_out_time": "11:00 AM",
@@ -13,21 +16,36 @@
           "room_type": "Private Pool Villa",
           "capacity": 4,
           "price_per_night_inr": 18000,
-          "amenities": ["private pool", "AC", "WiFi", "kitchenette", "private parking"],
+          "amenities": [
+            "private pool",
+            "AC",
+            "WiFi",
+            "kitchenette",
+            "private parking"
+          ],
           "total_rooms": 2
         },
         {
           "room_type": "Garden View Room",
           "capacity": 2,
           "price_per_night_inr": 7000,
-          "amenities": ["AC", "WiFi", "garden view"],
+          "amenities": [
+            "AC",
+            "WiFi",
+            "garden view"
+          ],
           "total_rooms": 4
         },
         {
           "room_type": "Beachfront Suite",
           "capacity": 3,
           "price_per_night_inr": 12000,
-          "amenities": ["AC", "WiFi", "sea view", "balcony"],
+          "amenities": [
+            "AC",
+            "WiFi",
+            "sea view",
+            "balcony"
+          ],
           "total_rooms": 3
         }
       ],
@@ -38,18 +56,33 @@
         "id_proof": "Valid government photo ID required at check-in."
       },
       "add_ons": [
-        {"name": "Airport pickup (Goa/Dabolim)", "price_inr": 1200},
-        {"name": "Breakfast (per person/day)", "price_inr": 350},
-        {"name": "Early check-in (subject to availability)", "price_inr": 1000},
-        {"name": "Private candlelight dinner setup", "price_inr": 2500}
+        {
+          "name": "Airport pickup (Goa/Dabolim)",
+          "price_inr": 1200
+        },
+        {
+          "name": "Breakfast (per person/day)",
+          "price_inr": 350
+        },
+        {
+          "name": "Early check-in (subject to availability)",
+          "price_inr": 1000
+        },
+        {
+          "name": "Private candlelight dinner setup",
+          "price_inr": 2500
+        }
       ]
     },
     {
-      "property_id": "jaipur-heritage-haveli",
-      "name": "Jaipur Heritage Haveli",
-      "location": "Amer Road, Jaipur, Rajasthan",
-      "contact": {"phone": "+91-98765-11002", "email": "reservations@jaipurheritagehaveli.example.com"},
-      "description": "Restored 19th-century haveli with courtyard dining, near Amer Fort.",
+      "property_id": "goa-heritage-villa",
+      "name": "Goa Heritage Villa",
+      "location": "Fontainhas, Panaji, Goa",
+      "contact": {
+        "phone": "+91-98765-11002",
+        "email": "reservations@goaheritagevilla.example.com"
+      },
+      "description": "Restored Indo-Portuguese heritage home in Panaji's Fontainhas quarter, with courtyard dining and colonial-era architecture.",
       "check_in_time": "12:00 PM",
       "check_out_time": "10:00 AM",
       "rooms": [
@@ -57,21 +90,33 @@
           "room_type": "Non-AC Standard Room",
           "capacity": 2,
           "price_per_night_inr": 2500,
-          "amenities": ["WiFi", "ceiling fan"],
+          "amenities": [
+            "WiFi",
+            "ceiling fan"
+          ],
           "total_rooms": 5
         },
         {
           "room_type": "Heritage Room",
           "capacity": 2,
           "price_per_night_inr": 4500,
-          "amenities": ["AC", "WiFi", "heritage decor"],
+          "amenities": [
+            "AC",
+            "WiFi",
+            "heritage decor"
+          ],
           "total_rooms": 6
         },
         {
           "room_type": "Royal Suite",
           "capacity": 4,
           "price_per_night_inr": 9000,
-          "amenities": ["AC", "WiFi", "private balcony", "courtyard view"],
+          "amenities": [
+            "AC",
+            "WiFi",
+            "private balcony",
+            "courtyard view"
+          ],
           "total_rooms": 2
         }
       ],
@@ -82,18 +127,33 @@
         "id_proof": "Valid government photo ID required at check-in (Aadhaar/Passport/DL)."
       },
       "add_ons": [
-        {"name": "Airport pickup (Jaipur)", "price_inr": 700},
-        {"name": "Railway station pickup", "price_inr": 350},
-        {"name": "Traditional Rajasthani thali dinner (per person)", "price_inr": 450},
-        {"name": "Guided Amer Fort tour", "price_inr": 1500}
+        {
+          "name": "Airport pickup (Goa/Dabolim)",
+          "price_inr": 900
+        },
+        {
+          "name": "Railway station pickup (Karmali)",
+          "price_inr": 400
+        },
+        {
+          "name": "Traditional Goan fish thali dinner (per person)",
+          "price_inr": 450
+        },
+        {
+          "name": "Guided Old Goa churches & Fontainhas walking tour",
+          "price_inr": 1200
+        }
       ]
     },
     {
-      "property_id": "manali-pine-retreat",
-      "name": "Manali Pine Retreat",
-      "location": "Old Manali, Himachal Pradesh",
-      "contact": {"phone": "+91-98765-11003", "email": "reservations@manalipineretreat.example.com"},
-      "description": "Mountain-view cottages surrounded by pine forest, 10 minutes from Old Manali market.",
+      "property_id": "goa-backwater-retreat",
+      "name": "Goa Backwater Retreat",
+      "location": "Chapora Riverside, Assagao, North Goa",
+      "contact": {
+        "phone": "+91-98765-11003",
+        "email": "reservations@goabackwaterretreat.example.com"
+      },
+      "description": "Riverside cottages along the Chapora backwaters, surrounded by coconut groves, 10 minutes from Assagao village.",
       "check_in_time": "1:00 PM",
       "check_out_time": "11:00 AM",
       "rooms": [
@@ -101,35 +161,61 @@
           "room_type": "Dorm Bed",
           "capacity": 1,
           "price_per_night_inr": 1200,
-          "amenities": ["heater", "shared bathroom", "WiFi"],
+          "amenities": [
+            "AC",
+            "shared bathroom",
+            "WiFi"
+          ],
           "total_rooms": 8
         },
         {
-          "room_type": "Mountain View Cottage",
+          "room_type": "River View Cottage",
           "capacity": 3,
           "price_per_night_inr": 6000,
-          "amenities": ["heater", "WiFi", "mountain view", "balcony"],
+          "amenities": [
+            "AC",
+            "WiFi",
+            "river view",
+            "balcony"
+          ],
           "total_rooms": 3
         },
         {
           "room_type": "Family Cottage",
           "capacity": 5,
           "price_per_night_inr": 9500,
-          "amenities": ["heater", "WiFi", "kitchenette", "mountain view"],
+          "amenities": [
+            "AC",
+            "WiFi",
+            "kitchenette",
+            "river view"
+          ],
           "total_rooms": 2
         }
       ],
       "policies": {
-        "cancellation": "Free cancellation up to 72 hours before check-in (mountain weather policy).",
+        "cancellation": "Free cancellation up to 72 hours before check-in (monsoon-season policy).",
         "payment": "40% advance to hold, balance at check-in.",
         "pets": "Allowed with prior notice, additional cleaning fee of INR 500 applies.",
         "id_proof": "Valid government photo ID required at check-in."
       },
       "add_ons": [
-        {"name": "Airport pickup (Bhuntar/Kullu)", "price_inr": 1800},
-        {"name": "Breakfast (per person/day)", "price_inr": 300},
-        {"name": "Bonfire setup (evening)", "price_inr": 800},
-        {"name": "Guided Solang Valley trek", "price_inr": 2000}
+        {
+          "name": "Airport pickup (Goa/Dabolim)",
+          "price_inr": 1000
+        },
+        {
+          "name": "Breakfast (per person/day)",
+          "price_inr": 300
+        },
+        {
+          "name": "Bonfire setup (evening)",
+          "price_inr": 800
+        },
+        {
+          "name": "Guided Chapora Fort & backwater kayaking tour",
+          "price_inr": 1800
+        }
       ]
     }
   ]
